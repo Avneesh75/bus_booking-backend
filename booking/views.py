@@ -494,8 +494,10 @@ def driver_list(request):
 
     serializer = DriverSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # Attach company to the new driver if admin has one
+        company = _get_company(request.user)
+        driver = serializer.save(company=company) if company else serializer.save()
+        return Response(DriverSerializer(driver).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

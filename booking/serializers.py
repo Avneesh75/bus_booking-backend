@@ -93,9 +93,18 @@ class BusSerializer(serializers.ModelSerializer):
 
 
 class DriverSerializer(serializers.ModelSerializer):
+    company = CompanySerializer(read_only=True)
+    company_id = serializers.PrimaryKeyRelatedField(
+        queryset=Company.objects.all(),
+        source='company',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
     class Meta:
         model  = Driver
-        fields = ['id', 'name', 'license_number', 'phone', 'experience_years', 'is_active']
+        fields = ['id', 'name', 'license_number', 'phone', 'experience_years', 'is_active', 'company', 'company_id']
 
 
 class SeatSerializer(serializers.ModelSerializer):

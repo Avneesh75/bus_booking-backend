@@ -88,7 +88,7 @@ class Route(TimeMixin):
         ordering = ['source']
 
     def __str__(self):
-        return f"{self.source} → {self.destination}"
+        return f"{self.source} -> {self.destination}"
 
 
 # ── Route Stop (intermediate stops on a route) ────────────────────────────────

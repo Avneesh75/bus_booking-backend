@@ -251,10 +251,11 @@ class Command(BaseCommand):
                 }
             )
             route_objs.append(obj)
+            route_label = f"{obj.source} -> {obj.destination}"
             if created:
-                self.ok(f"Route: {obj}")
+                self.ok(f"Route: {route_label}")
             else:
-                self.log(f"Route exists: {obj}")
+                self.log(f"Route exists: {route_label}")
 
             # Stops
             for s in r.get("stops", []):
@@ -324,7 +325,8 @@ class Command(BaseCommand):
             trip_objs.append(trip)
             if created:
                 sa_count = SeatAvailability.objects.filter(trip=trip).count()
-                self.ok(f"Trip: {trip.bus.name}  {trip.route}  ({sa_count} seats)")
+                route_label = f"{trip.route.source} -> {trip.route.destination}"
+                self.ok(f"Trip: {trip.bus.name}  {route_label}  ({sa_count} seats)")
 
         # ── 7. BusLocation for every trip ────────────────────────────────────
         self.stdout.write("\n[7] Bus Locations")
