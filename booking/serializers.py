@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Company, UserProfile, Route, RouteStop,
-    Bus, Seat, Trip, Driver,
+    Bus, BusImage, Seat, Trip, Driver,
     SeatAvailability, Booking, BookingSeat, PassengerDetail,
     Payment, BusLocation,
 )
@@ -14,7 +14,8 @@ from .models import (
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model  = Company
-        fields = ['id', 'name', 'slug', 'is_active', 'phone', 'email', 'address']
+        fields = ['id', 'name', 'slug', 'is_active', 'phone', 'email', 'address',
+                  'luggage_free_kg', 'luggage_charge_per_kg']
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,17 +80,44 @@ class RouteWithStopsSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 # Bus / Driver / Seat
 # ─────────────────────────────────────────────────────────────────────────────
+class BusImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = BusImage
+        fields = ['id', 'image_url']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+
+
 class BusSerializer(serializers.ModelSerializer):
-    seat_count = serializers.SerializerMethodField()
-    company    = CompanySerializer(read_only=True)
+    seat_count    = serializers.SerializerMethodField()
+    company       = CompanySerializer(read_only=True)
+    image_url     = serializers.SerializerMethodField()
+    gallery_images = BusImageSerializer(many=True, read_only=True)
 
     class Meta:
         model  = Bus
         fields = ['id', 'bus_number', 'name', 'bus_type', 'total_seats',
-                  'is_ac', 'is_active', 'amenities', 'seat_count', 'company']
+                  'is_ac', 'is_active', 'amenities', 'seat_count', 'company',
+                  'image_url', 'gallery_images']
 
     def get_seat_count(self, obj):
         return obj.seats.count()
+
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
 
 
 class DriverSerializer(serializers.ModelSerializer):
@@ -127,13 +155,22 @@ class TripSerializer(serializers.ModelSerializer):
     driver_id = serializers.PrimaryKeyRelatedField(
         queryset=Driver.objects.all(), source='driver', write_only=True,
         required=False, allow_null=True)
+    discounted_price = serializers.SerializerMethodField()
 
     class Meta:
         model  = Trip
         fields = ['id', 'bus', 'bus_id', 'route', 'route_id',
                   'driver', 'driver_id', 'departure_time', 'arrival_time',
                   'price', 'is_active', 'cancellation_charge_pct',
-                  'child_max_age', 'senior_min_age', 'child_fare_pct', 'senior_fare_pct']
+                  'child_max_age', 'senior_min_age', 'child_fare_pct', 'senior_fare_pct',
+                  'discount_pct', 'discount_label', 'discounted_price']
+
+    def get_discounted_price(self, obj):
+        from decimal import Decimal
+        if obj.discount_pct and obj.discount_pct > 0:
+            disc = (obj.price * obj.discount_pct / Decimal('100')).quantize(Decimal('0.01'))
+            return float(obj.price - disc)
+        return float(obj.price)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

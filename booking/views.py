@@ -12,14 +12,14 @@ from datetime import date
 import razorpay
 
 from .models import (
-    Company, Route, RouteStop, Bus, Trip, Seat,
+    Company, Route, RouteStop, Bus, BusImage, Trip, Seat,
     SeatAvailability, Booking, BookingSeat, PassengerDetail,
     Payment, Driver, BusLocation, UserProfile,
 )
 from .serializers import (
     CompanySerializer, UserSerializer,
     RouteSerializer, RouteStopSerializer,
-    BusSerializer, TripSerializer, SeatAvailabilitySerializer,
+    BusSerializer, BusImageSerializer, TripSerializer, SeatAvailabilitySerializer,
     BookingSerializer, BookingCreateSerializer,
     PaymentSerializer, PaymentCreateSerializer,
     DriverSerializer, BusLocationSerializer,
@@ -170,7 +170,7 @@ def routes(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def buses(request):
-    return Response(BusSerializer(Bus.objects.filter(is_active=True), many=True).data)
+    return Response(BusSerializer(Bus.objects.filter(is_active=True), many=True, context={'request': request}).data)
 
 
 @api_view(['GET'])
@@ -192,7 +192,7 @@ def trips(request):
     if date_filter:
         qs = qs.filter(departure_time__date=date_filter)
 
-    return Response(TripSerializer(qs, many=True).data)
+    return Response(TripSerializer(qs, many=True, context={'request': request}).data)
 
 
 @api_view(['GET'])
@@ -204,7 +204,7 @@ def trip_detail(request, trip_id):
         )
     except Trip.DoesNotExist:
         return Response({"error": "Trip not found."}, status=status.HTTP_404_NOT_FOUND)
-    return Response(TripSerializer(trip).data)
+    return Response(TripSerializer(trip, context={'request': request}).data)
 
 
 @api_view(['GET'])
@@ -240,6 +240,18 @@ def route_stops(request, route_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def book(request):
+    # Release any stale PENDING bookings the user has for this trip BEFORE
+    # running serializer validation — serializer checks is_booked, so we must
+    # free the seats first, otherwise re-booking after a failed payment always fails.
+    try:
+        trip_id_raw = request.data.get('trip_id')
+        if trip_id_raw:
+            stale = Booking.objects.filter(user=request.user, trip_id=trip_id_raw, status='PENDING')
+            for b in stale:
+                _delete_pending_booking(b)
+    except Exception:
+        pass
+
     serializer = BookingCreateSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -253,12 +265,6 @@ def book(request):
 
     passenger_map = {str(p['seat_id']): p for p in passengers}
 
-    # Release any stale PENDING bookings this user has for the same trip
-    # (happens when user went back from payment step without completing payment)
-    stale_bookings = Booking.objects.filter(user=request.user, trip=trip, status='PENDING')
-    for stale in stale_bookings:
-        _delete_pending_booking(stale)
-
     with transaction.atomic():
         seat_availabilities = list(
             SeatAvailability.objects
@@ -270,14 +276,22 @@ def book(request):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # Age-based fare calculation per seat
+        # Use discounted price if an offer is active
+        from decimal import Decimal
+        effective_price = (
+            trip.price * (1 - trip.discount_pct / Decimal('100'))
+            if trip.discount_pct and trip.discount_pct > 0
+            else trip.price
+        )
+
+        # Age-based fare calculation per seat (applied on top of effective price)
         fare_per_seat = {}
         for sa in seat_availabilities:
             p_data = passenger_map.get(str(sa.seat_id))
             if p_data:
-                fare_per_seat[str(sa.seat_id)] = _calc_fare(trip.price, p_data['age'], trip)
+                fare_per_seat[str(sa.seat_id)] = _calc_fare(effective_price, p_data['age'], trip)
             else:
-                fare_per_seat[str(sa.seat_id)] = float(trip.price)
+                fare_per_seat[str(sa.seat_id)] = float(effective_price)
 
         total_amount = round(sum(fare_per_seat.values()), 2)
 
@@ -849,7 +863,7 @@ def admin_trips(request):
         request.user,
         field='bus__company',
     ).order_by('departure_time')
-    return Response(TripSerializer(qs, many=True).data)
+    return Response(TripSerializer(qs, many=True, context={'request': request}).data)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -985,17 +999,30 @@ def admin_bus_list(request):
 
     if request.method == 'GET':
         qs = _company_filter(Bus.objects.all().order_by('name'), request.user)
-        return Response(BusSerializer(qs, many=True).data)
+        return Response(BusSerializer(qs, many=True, context={'request': request}).data)
 
-    serializer = BusSerializer(data=request.data)
+    # Accept multipart (image) or JSON
+    import json as _json
+    data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+    if 'amenities' in data and isinstance(data.get('amenities'), str):
+        try:
+            data['amenities'] = _json.loads(data['amenities'])
+        except Exception:
+            data['amenities'] = []
+
+    serializer = BusSerializer(data=data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # Attach company to the new bus if admin has one
     company = _get_company(request.user)
     bus = serializer.save(company=company) if company else serializer.save()
+
+    if 'image' in request.FILES:
+        bus.image = request.FILES['image']
+        bus.save(update_fields=['image'])
+
     seat_count = _make_seats(bus)
-    data = BusSerializer(bus).data
+    data = BusSerializer(bus, context={'request': request}).data
     data['seats_created'] = seat_count
     return Response(data, status=status.HTTP_201_CREATED)
 
@@ -1012,19 +1039,62 @@ def admin_bus_detail(request, bus_id):
         return Response({"error": "Bus not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'GET':
-        return Response(BusSerializer(bus).data)
+        return Response(BusSerializer(bus, context={'request': request}).data)
 
     if request.method in ('PUT', 'PATCH'):
-        serializer = BusSerializer(bus, data=request.data,
-                                    partial=(request.method == 'PATCH'))
+        import json as _json
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if 'amenities' in data and isinstance(data.get('amenities'), str):
+            try:
+                data['amenities'] = _json.loads(data['amenities'])
+            except Exception:
+                data['amenities'] = []
+
+        serializer = BusSerializer(bus, data=data, partial=(request.method == 'PATCH'))
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
+            bus = serializer.save()
+            if 'image' in request.FILES:
+                bus.image = request.FILES['image']
+                bus.save(update_fields=['image'])
+            return Response(BusSerializer(bus, context={'request': request}).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     bus.is_active = False
     bus.save()
     return Response({"message": "Bus deactivated."})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_bus_add_image(request, bus_id):
+    err = _require_admin(request)
+    if err:
+        return err
+    try:
+        bus = Bus.objects.get(id=bus_id)
+    except Bus.DoesNotExist:
+        return Response({"error": "Bus not found."}, status=status.HTTP_404_NOT_FOUND)
+    if bus.gallery_images.count() >= 4:
+        return Response({"error": "Maximum 4 gallery images allowed."}, status=status.HTTP_400_BAD_REQUEST)
+    if 'image' not in request.FILES:
+        return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
+    img = BusImage.objects.create(bus=bus, image=request.FILES['image'])
+    return Response(BusImageSerializer(img, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_bus_delete_image(request, bus_id, image_id):
+    err = _require_admin(request)
+    if err:
+        return err
+    try:
+        img = BusImage.objects.get(id=image_id, bus_id=bus_id)
+    except BusImage.DoesNotExist:
+        return Response({"error": "Image not found."}, status=status.HTTP_404_NOT_FOUND)
+    img.image.delete(save=False)
+    img.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1084,12 +1154,23 @@ def admin_trip_update(request, trip_id):
     except Trip.DoesNotExist:
         return Response({"error": "Trip not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    from decimal import Decimal, InvalidOperation
     if 'price' in request.data:
-        trip.price = request.data['price']
+        try:
+            trip.price = Decimal(str(request.data['price']))
+        except (InvalidOperation, TypeError):
+            return Response({"error": "Invalid price value."}, status=status.HTTP_400_BAD_REQUEST)
     if 'is_active' in request.data:
         trip.is_active = request.data['is_active']
+    if 'discount_pct' in request.data:
+        try:
+            trip.discount_pct = Decimal(str(request.data['discount_pct']))
+        except (InvalidOperation, TypeError):
+            return Response({"error": "Invalid discount value."}, status=status.HTTP_400_BAD_REQUEST)
+    if 'discount_label' in request.data:
+        trip.discount_label = request.data['discount_label']
     trip.save()
-    return Response(TripSerializer(trip).data)
+    return Response(TripSerializer(trip, context={'request': request}).data)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1304,7 +1385,7 @@ def admin_my_company(request):
         return Response(CompanySerializer(company).data)
 
     # PATCH — update allowed fields only
-    allowed = {k: v for k, v in request.data.items() if k in ('name', 'phone', 'email', 'address')}
+    allowed = {k: v for k, v in request.data.items() if k in ('name', 'phone', 'email', 'address', 'luggage_free_kg', 'luggage_charge_per_kg')}
     serializer = CompanySerializer(company, data=allowed, partial=True)
     if serializer.is_valid():
         serializer.save()
@@ -1320,7 +1401,16 @@ def admin_companies(request):
         return err
 
     if request.method == 'GET':
-        return Response(CompanySerializer(Company.objects.all(), many=True).data)
+        data = []
+        for c in Company.objects.all():
+            cd = CompanySerializer(c).data
+            rev = Booking.objects.filter(
+                status='BOOKED', trip__bus__company=c
+            ).aggregate(r=Sum('total_amount'))['r'] or 0
+            cd['revenue']  = str(rev)
+            cd['bookings'] = Booking.objects.filter(trip__bus__company=c).count()
+            data.append(cd)
+        return Response(data)
 
     # POST — create company
     serializer = CompanySerializer(data=request.data)

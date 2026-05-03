@@ -9,7 +9,7 @@ from .views import (
     driver_list, driver_detail,
     create_order, verify_payment, payment_failure, razorpay_webhook,
     admin_dashboard, admin_bookings, admin_trips,
-    admin_bus_list, admin_bus_detail,
+    admin_bus_list, admin_bus_detail, admin_bus_add_image, admin_bus_delete_image,
     admin_trip_create, admin_trip_update,
     admin_route_list, admin_route_detail,
     route_stops, admin_route_stops, admin_stop_detail,
@@ -72,8 +72,10 @@ urlpatterns = [
     path('admin/trips/<str:trip_id>/update/', admin_trip_update, name='admin-trip-update'),
 
     # Admin — buses
-    path('admin/buses/',               admin_bus_list,   name='admin-bus-list'),
-    path('admin/buses/<str:bus_id>/',  admin_bus_detail, name='admin-bus-detail'),
+    path('admin/buses/',                                          admin_bus_list,         name='admin-bus-list'),
+    path('admin/buses/<str:bus_id>/',                            admin_bus_detail,       name='admin-bus-detail'),
+    path('admin/buses/<str:bus_id>/images/',                     admin_bus_add_image,    name='admin-bus-add-image'),
+    path('admin/buses/<str:bus_id>/images/<int:image_id>/',      admin_bus_delete_image, name='admin-bus-delete-image'),
 
     # Admin — routes
     path('admin/routes/', admin_route_list, name='admin-route-list'),

@@ -1,6 +1,6 @@
 """
 python manage.py seed_data         — seed (skips existing, safe to re-run)
-python manage.py seed_data --reset  — wipe everything and start fresh
+python manage.py seed_data --reset  — wipe trips/bookings and re-seed
 """
 import random
 from django.core.management.base import BaseCommand
@@ -22,8 +22,18 @@ from booking.models import (
 # ── Master data ───────────────────────────────────────────────────────────────
 
 COMPANIES = [
-    {"name": "RedBus Express",  "slug": "redbus-express"},
-    {"name": "VRL Travels",     "slug": "vrl-travels"},
+    {
+        "name": "RedBus Express",  "slug": "redbus-express",
+        "phone": "+91 98765 00001",  "email": "support@redbusexpress.in",
+        "address": "12 MG Road, New Delhi - 110001",
+        "luggage_free_kg": 15,  "luggage_charge_per_kg": 50,
+    },
+    {
+        "name": "VRL Travels",     "slug": "vrl-travels",
+        "phone": "+91 98765 00002",  "email": "care@vrltravels.in",
+        "address": "45 Brigade Road, Bangalore - 560001",
+        "luggage_free_kg": 20,  "luggage_charge_per_kg": 40,
+    },
 ]
 
 ROUTES = [
@@ -49,56 +59,55 @@ ROUTES = [
      ]},
     {"source": "Bangalore", "destination": "Chennai",   "distance_km": 350,  "company_idx": 1,
      "stops": [
-         {"name": "Hosur",    "order": 1, "arrival_offset_mins":  50},
-         {"name": "Krishnagiri","order":2,"arrival_offset_mins": 120},
-         {"name": "Vellore",  "order": 3, "arrival_offset_mins": 210},
+         {"name": "Hosur",       "order": 1, "arrival_offset_mins":  50},
+         {"name": "Krishnagiri", "order": 2, "arrival_offset_mins": 120},
+         {"name": "Vellore",     "order": 3, "arrival_offset_mins": 210},
      ]},
     {"source": "Hyderabad", "destination": "Bangalore", "distance_km": 570,  "company_idx": 1,
      "stops": [
-         {"name": "Kurnool",  "order": 1, "arrival_offset_mins": 120},
-         {"name": "Bellary",  "order": 2, "arrival_offset_mins": 240},
-         {"name": "Tumkur",   "order": 3, "arrival_offset_mins": 480},
+         {"name": "Kurnool", "order": 1, "arrival_offset_mins": 120},
+         {"name": "Bellary", "order": 2, "arrival_offset_mins": 240},
+         {"name": "Tumkur",  "order": 3, "arrival_offset_mins": 480},
      ]},
 ]
 
 BUSES = [
-    {"bus_number": "DL-01-AA-1234", "name": "Rajdhani Express", "bus_type": "LUXURY",  "total_seats": 40, "is_ac": True,  "company_idx": 0},
-    {"bus_number": "MH-02-BB-5678", "name": "Sahyadri Travels", "bus_type": "NORMAL",  "total_seats": 40, "is_ac": False, "company_idx": 0},
-    {"bus_number": "KA-03-CC-9012", "name": "Karnataka Deluxe", "bus_type": "LUXURY",  "total_seats": 40, "is_ac": True,  "company_idx": 1},
-    {"bus_number": "TN-04-DD-3456", "name": "Southern Star",    "bus_type": "MINI",    "total_seats": 20, "is_ac": True,  "company_idx": 1},
-    {"bus_number": "UP-05-EE-7890", "name": "Volvo Sleeper",    "bus_type": "SLEEPER", "total_seats": 36, "is_ac": True,  "company_idx": 0},
+    {"bus_number": "DL-01-AA-1234", "name": "Rajdhani Express", "bus_type": "LUXURY",  "total_seats": 40, "is_ac": True,  "amenities": ["WiFi", "USB Charging", "Meals"], "company_idx": 0},
+    {"bus_number": "MH-02-BB-5678", "name": "Sahyadri Travels", "bus_type": "NORMAL",  "total_seats": 40, "is_ac": False, "amenities": ["USB Charging"],               "company_idx": 0},
+    {"bus_number": "KA-03-CC-9012", "name": "Karnataka Deluxe", "bus_type": "LUXURY",  "total_seats": 40, "is_ac": True,  "amenities": ["WiFi", "Meals"],              "company_idx": 1},
+    {"bus_number": "TN-04-DD-3456", "name": "Southern Star",    "bus_type": "MINI",    "total_seats": 20, "is_ac": True,  "amenities": ["WiFi"],                       "company_idx": 1},
+    {"bus_number": "UP-05-EE-7890", "name": "Volvo Sleeper",    "bus_type": "SLEEPER", "total_seats": 36, "is_ac": True,  "amenities": ["WiFi", "USB Charging", "Blanket", "Meals"], "company_idx": 0},
 ]
 
 DRIVERS = [
-    {"name": "Ramesh Kumar",    "license_number": "DL-0120110012345", "phone": "9876543210", "experience_years": 12, "company_idx": 0},
-    {"name": "Suresh Yadav",    "license_number": "MH-0220120023456", "phone": "9765432109", "experience_years":  8, "company_idx": 0},
-    {"name": "Prakash Sharma",  "license_number": "KA-0320130034567", "phone": "9654321098", "experience_years": 15, "company_idx": 1},
-    {"name": "Arjun Singh",     "license_number": "TN-0420140045678", "phone": "9543210987", "experience_years":  6, "company_idx": 1},
-    {"name": "Mohan Das",       "license_number": "UP-0520150056789", "phone": "9432109876", "experience_years": 10, "company_idx": 0},
+    {"name": "Ramesh Kumar",   "license_number": "DL-0120110012345", "phone": "9876543210", "experience_years": 12, "company_idx": 0},
+    {"name": "Suresh Yadav",   "license_number": "MH-0220120023456", "phone": "9765432109", "experience_years":  8, "company_idx": 0},
+    {"name": "Prakash Sharma", "license_number": "KA-0320130034567", "phone": "9654321098", "experience_years": 15, "company_idx": 1},
+    {"name": "Arjun Singh",    "license_number": "TN-0420140045678", "phone": "9543210987", "experience_years":  6, "company_idx": 1},
+    {"name": "Mohan Das",      "license_number": "UP-0520150056789", "phone": "9432109876", "experience_years": 10, "company_idx": 0},
 ]
 
-# (route_idx, bus_idx, driver_idx, dep_offset_hours, duration_hours, price)
+# (route_idx, bus_idx, driver_idx, dep_offset_hours, duration_hours, price, discount_pct, discount_label)
 TRIPS = [
-    (0, 0, 0,   8, 24, 1299),
-    (0, 1, 1,  20, 26,  899),
-    (0, 4, 2,  32, 24, 1499),   # Volvo Sleeper — Delhi→Mumbai
-    (1, 1, 3,   7,  5,  449),
-    (1, 2, 4,  14,  5,  599),
-    (1, 3, 0,  22,  5,  349),
-    (2, 0, 1,   6,  3,  299),
-    (2, 1, 2,  15,  3,  249),
-    (3, 2, 3,   9,  7,  649),
-    (3, 0, 4,  21,  7,  749),
-    (4, 1, 0,  10,  9,  549),
-    (4, 2, 1,  18,  9,  699),
-    (4, 4, 2,  26,  9,  849),   # Volvo Sleeper — Hyderabad→Bangalore
+    (0, 0, 0,   8, 24, 1299, 15, "Summer Sale"),      # Delhi→Mumbai Rajdhani — 15% off
+    (0, 1, 1,  20, 26,  899,  0, ""),                  # Delhi→Mumbai Sahyadri — no offer
+    (0, 4, 2,  32, 24, 1499, 10, "Early Bird"),        # Delhi→Mumbai Volvo Sleeper — 10% off
+    (1, 1, 3,   7,  5,  449, 20, "Weekend Special"),   # Delhi→Jaipur — 20% off
+    (1, 2, 4,  14,  5,  599,  0, ""),
+    (1, 3, 0,  22,  5,  349,  5, "Festival Offer"),    # Delhi→Jaipur — 5% off
+    (2, 0, 1,   6,  3,  299,  0, ""),                  # Mumbai→Pune
+    (2, 1, 2,  15,  3,  249, 12, "Happy Hours"),       # Mumbai→Pune — 12% off
+    (3, 2, 3,   9,  7,  649,  0, ""),                  # Bangalore→Chennai
+    (3, 0, 4,  21,  7,  749, 18, "Diwali Special"),    # Bangalore→Chennai — 18% off
+    (4, 1, 0,  10,  9,  549,  0, ""),                  # Hyderabad→Bangalore
+    (4, 2, 1,  18,  9,  699,  8, "Monsoon Offer"),     # Hyderabad→Bangalore — 8% off
+    (4, 4, 2,  26,  9,  849, 25, "Mega Sale"),         # Hyderabad→Bangalore Volvo — 25% off
 ]
 
 CUSTOMER_USERS = [
     {"username": "priya_sharma",  "email": "priya@example.com",  "password": "Test@1234", "phone": "9811223344", "company_idx": None},
     {"username": "rahul_verma",   "email": "rahul@example.com",  "password": "Test@1234", "phone": "9922334455", "company_idx": None},
     {"username": "anita_singh",   "email": "anita@example.com",  "password": "Test@1234", "phone": "9033445566", "company_idx": None},
-    # Staff users tied to companies
     {"username": "redbus_staff",  "email": "staff1@redbus.com",  "password": "Staff@123", "phone": "9144556677", "company_idx": 0},
     {"username": "vrl_staff",     "email": "staff2@vrl.com",     "password": "Staff@123", "phone": "9255667788", "company_idx": 1},
 ]
@@ -155,7 +164,7 @@ def rand_age():
 # ── Command ───────────────────────────────────────────────────────────────────
 
 class Command(BaseCommand):
-    help = "Seed the database with sample data for all models"
+    help = "Seed the database with sample data including offers and luggage policy"
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true',
@@ -195,13 +204,26 @@ class Command(BaseCommand):
         for c in COMPANIES:
             obj, created = Company.objects.get_or_create(
                 slug=c["slug"],
-                defaults={"name": c["name"], "is_active": True}
+                defaults={
+                    "name": c["name"], "is_active": True,
+                    "phone": c["phone"], "email": c["email"], "address": c["address"],
+                    "luggage_free_kg": c["luggage_free_kg"],
+                    "luggage_charge_per_kg": c["luggage_charge_per_kg"],
+                }
             )
+            # Always update contact + luggage fields even if company already exists
+            updated = False
+            for field in ("phone", "email", "address", "luggage_free_kg", "luggage_charge_per_kg"):
+                if getattr(obj, field) != c[field]:
+                    setattr(obj, field, c[field])
+                    updated = True
+            if updated:
+                obj.save()
             company_objs.append(obj)
             if created:
-                self.ok(f"Company: {obj.name}")
+                self.ok(f"Company: {obj.name}  (luggage: {c['luggage_free_kg']}kg free, Rs{c['luggage_charge_per_kg']}/kg excess)")
             else:
-                self.log(f"Company exists: {obj.name}")
+                self.log(f"Company exists: {obj.name}  (contact + luggage updated)")
 
         # ── 2. Users ──────────────────────────────────────────────────────────
         self.stdout.write("\n[2] Users")
@@ -230,12 +252,12 @@ class Command(BaseCommand):
             )
             customer_objs.append(user)
             if created:
-                # UserProfile is auto-created by signal, just set extra fields
                 profile = user.profile
                 profile.phone   = u["phone"]
                 profile.company = company_objs[u["company_idx"]] if u["company_idx"] is not None else None
                 profile.save()
-                self.ok(f"User: {user.username}  ({'staff @ ' + company_objs[u['company_idx']].name if u['company_idx'] is not None else 'customer'})")
+                label = 'staff @ ' + company_objs[u["company_idx"]].name if u["company_idx"] is not None else 'customer'
+                self.ok(f"User: {user.username}  ({label})")
             else:
                 self.log(f"User exists: {user.username}")
 
@@ -245,26 +267,17 @@ class Command(BaseCommand):
         for r in ROUTES:
             obj, created = Route.objects.get_or_create(
                 source=r["source"], destination=r["destination"],
-                defaults={
-                    "distance_km": r["distance_km"],
-                    "company": company_objs[r["company_idx"]],
-                }
+                defaults={"distance_km": r["distance_km"], "company": company_objs[r["company_idx"]]}
             )
             route_objs.append(obj)
-            route_label = f"{obj.source} -> {obj.destination}"
             if created:
-                self.ok(f"Route: {route_label}")
+                self.ok(f"Route: {obj.source} -> {obj.destination}")
             else:
-                self.log(f"Route exists: {route_label}")
-
-            # Stops
+                self.log(f"Route exists: {obj.source} -> {obj.destination}")
             for s in r.get("stops", []):
                 stop, s_created = RouteStop.objects.get_or_create(
                     route=obj, order=s["order"],
-                    defaults={
-                        "name":                s["name"],
-                        "arrival_offset_mins": s["arrival_offset_mins"],
-                    }
+                    defaults={"name": s["name"], "arrival_offset_mins": s["arrival_offset_mins"]}
                 )
                 if s_created:
                     self.log(f"    Stop #{s['order']}: {stop.name}  (+{s['arrival_offset_mins']} min)")
@@ -279,6 +292,7 @@ class Command(BaseCommand):
                 defaults={
                     "name": b["name"], "bus_type": b["bus_type"],
                     "total_seats": b["total_seats"], "is_ac": b["is_ac"],
+                    "amenities": b["amenities"],
                     "company": company_objs[b["company_idx"]],
                 }
             )
@@ -286,8 +300,12 @@ class Command(BaseCommand):
             if created:
                 seats = make_seats(bus, b["total_seats"], is_sleeper=is_sleeper)
                 Seat.objects.bulk_create(seats)
-                self.ok(f"Bus: {bus}  ({len(seats)} seats created)")
+                self.ok(f"Bus: {bus}  ({len(seats)} seats, amenities: {', '.join(b['amenities'])})")
             else:
+                # Update amenities if changed
+                if bus.amenities != b["amenities"]:
+                    bus.amenities = b["amenities"]
+                    bus.save(update_fields=["amenities"])
                 self.log(f"Bus exists: {bus}")
 
         # ── 5. Drivers ────────────────────────────────────────────────────────
@@ -308,25 +326,34 @@ class Command(BaseCommand):
             else:
                 self.log(f"Driver exists: {driver.name}")
 
-        # ── 6. Trips (signal auto-creates SeatAvailability) ───────────────────
-        self.stdout.write("\n[6] Trips")
+        # ── 6. Trips with discount/offer data ─────────────────────────────────
+        self.stdout.write("\n[6] Trips (with offers)")
         now       = timezone.now().replace(minute=0, second=0, microsecond=0)
         trip_objs = []
-        for route_i, bus_i, driver_i, dep_offset, duration, price in TRIPS:
+        for route_i, bus_i, driver_i, dep_offset, duration, price, disc_pct, disc_label in TRIPS:
             dep = now + timedelta(hours=dep_offset)
             arr = dep + timedelta(hours=duration)
             trip, created = Trip.objects.get_or_create(
                 bus=bus_objs[bus_i], route=route_objs[route_i], departure_time=dep,
                 defaults={
-                    "arrival_time": arr, "price": price,
-                    "is_active": True, "driver": driver_objs[driver_i],
+                    "arrival_time": arr, "price": price, "is_active": True,
+                    "driver": driver_objs[driver_i],
+                    "discount_pct": disc_pct, "discount_label": disc_label,
                 }
             )
+            # Always update discount fields even if trip already exists
+            if trip.discount_pct != disc_pct or trip.discount_label != disc_label:
+                trip.discount_pct   = disc_pct
+                trip.discount_label = disc_label
+                trip.save(update_fields=["discount_pct", "discount_label"])
             trip_objs.append(trip)
             if created:
                 sa_count = SeatAvailability.objects.filter(trip=trip).count()
-                route_label = f"{trip.route.source} -> {trip.route.destination}"
-                self.ok(f"Trip: {trip.bus.name}  {route_label}  ({sa_count} seats)")
+                offer_str = f"  [{disc_pct}% off · {disc_label}]" if disc_pct else ""
+                self.ok(f"Trip: {trip.bus.name}  {trip.route.source}->{trip.route.destination}  Rs{price}{offer_str}  ({sa_count} seats)")
+            else:
+                offer_str = f"  [{disc_pct}% off]" if disc_pct else ""
+                self.log(f"Trip exists: {trip.bus.name}  {trip.route.source}->{trip.route.destination}{offer_str}  (discount updated)")
 
         # ── 7. BusLocation for every trip ────────────────────────────────────
         self.stdout.write("\n[7] Bus Locations")
@@ -336,7 +363,6 @@ class Command(BaseCommand):
             (18.5204, 73.8567),   # Pune
             (12.9716, 77.5946),   # Bangalore
             (17.3850, 78.4867),   # Hyderabad
-            (23.0225, 72.5714),   # Ahmedabad
             (26.9124, 75.7873),   # Jaipur
             (13.0827, 80.2707),   # Chennai
         ]
@@ -346,18 +372,14 @@ class Command(BaseCommand):
             lon += round(random.uniform(-0.5, 0.5), 4)
             loc, created = BusLocation.objects.get_or_create(
                 trip=trip,
-                defaults={
-                    "latitude":   lat,
-                    "longitude":  lon,
-                    "speed_kmph": round(random.uniform(40, 85), 1),
-                }
+                defaults={"latitude": lat, "longitude": lon, "speed_kmph": round(random.uniform(40, 85), 1)}
             )
             if created:
-                self.log(f"Location set for trip {trip.id}: ({lat}, {lon})")
+                self.log(f"Location set for {trip.bus.name}: ({lat:.4f}, {lon:.4f})")
 
-        # ── 8. Sample Bookings, BookingSeats, PassengerDetails, Payments ──────
+        # ── 8. Sample Bookings ────────────────────────────────────────────────
         self.stdout.write("\n[8] Bookings, Passengers & Payments")
-        customers = [u for u in customer_objs if not u.is_staff]  # only regular customers book
+        customers = [u for u in customer_objs if not u.is_staff]
 
         SAMPLE_BOOKINGS = [
             # (trip_idx, user_idx_in_customers, num_seats, status, pay_status)
@@ -382,91 +404,77 @@ class Command(BaseCommand):
             trip = trip_objs[trip_i]
             user = customers[cust_i % len(customers)]
 
-            # Pick available (not yet booked) seats for this trip
             avail = list(
                 SeatAvailability.objects
                 .filter(trip=trip, is_booked=False)
                 .select_related('seat')[:num_seats]
             )
             if len(avail) < num_seats:
-                self.log(f"  Not enough free seats on trip {trip_i}, skipping booking")
+                self.log(f"  Not enough free seats on trip {trip_i}, skipping")
                 continue
-
-            # Skip if this user already has a booking on this trip
             if Booking.objects.filter(user=user, trip=trip).exists():
                 continue
 
-            price        = trip.price
-            total_amount = price * len(avail)
-
-            # Pick random route stops for boarding/alighting (sometimes None)
-            route_stops = list(RouteStop.objects.filter(route=trip.route).order_by('order'))
-            from_stop = None
-            to_stop   = None
+            total_amount = trip.price * len(avail)
+            route_stops  = list(RouteStop.objects.filter(route=trip.route).order_by('order'))
+            from_stop = to_stop = None
             if route_stops and random.random() > 0.5:
-                idx = random.randint(0, len(route_stops) - 1)
+                idx       = random.randint(0, len(route_stops) - 1)
                 from_stop = route_stops[idx]
-                later = [s for s in route_stops if s.order > from_stop.order]
+                later     = [s for s in route_stops if s.order > from_stop.order]
                 if later:
                     to_stop = random.choice(later)
 
             booking = Booking.objects.create(
-                user=user, trip=trip,
-                status=b_status, total_amount=total_amount,
+                user=user, trip=trip, status=b_status,
+                total_amount=total_amount,
                 from_stop=from_stop, to_stop=to_stop,
                 created_by=user,
             )
 
-            # Mark seats as booked
             for sa in avail:
                 sa.is_booked = True
                 sa.save(update_fields=['is_booked'])
-
                 bs = BookingSeat.objects.create(booking=booking, seat=sa.seat)
-
-                # Passenger detail for each seat
                 PassengerDetail.objects.create(
                     booking_seat=bs,
-                    name=rand_name(),
-                    age=rand_age(),
-                    gender=rand_gender(),
+                    name=rand_name(), age=rand_age(), gender=rand_gender(),
                 )
 
-            # Payment record
             if not Payment.objects.filter(booking=booking).exists():
                 Payment.objects.create(
                     booking=booking,
                     razorpay_order_id=f"order_{''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=14))}",
                     transaction_id=f"pay_{''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=16))}",
-                    amount=total_amount,
-                    status=p_status,
+                    amount=total_amount, status=p_status,
                     payment_method=random.choice(['RAZORPAY', 'UPI', 'CARD', 'NETBANKING']),
                     created_by=user,
                 )
 
             bookings_created += 1
             stop_info = f" ({from_stop.name} -> {to_stop.name})" if from_stop and to_stop else ""
-            self.ok(
-                f"Booking: {user.username} × {trip.bus.name}"
-                f" [{len(avail)} seats]{stop_info}  status={b_status}"
-            )
+            self.ok(f"Booking: {user.username} × {trip.bus.name}  [{len(avail)} seats]{stop_info}  {b_status}")
 
         # ── Summary ───────────────────────────────────────────────────────────
+        trips_with_offers = Trip.objects.filter(discount_pct__gt=0).count()
         self.stdout.write(self.style.SUCCESS(
             "\n-------------------------------------\n"
             "  Seeding complete!\n"
-            f"  Companies : {Company.objects.count()}\n"
-            f"  Users     : {User.objects.count()}\n"
-            f"  Routes    : {Route.objects.count()} with {RouteStop.objects.count()} stops\n"
-            f"  Buses     : {Bus.objects.count()} with {Seat.objects.count()} seats\n"
-            f"  Drivers   : {Driver.objects.count()}\n"
-            f"  Trips     : {Trip.objects.count()}\n"
-            f"  Bookings  : {Booking.objects.count()}\n"
-            f"  Payments  : {Payment.objects.count()}\n"
-            f"  Locations : {BusLocation.objects.count()}\n"
+            f"  Companies      : {Company.objects.count()}\n"
+            f"  Users          : {User.objects.count()}\n"
+            f"  Routes         : {Route.objects.count()} with {RouteStop.objects.count()} stops\n"
+            f"  Buses          : {Bus.objects.count()} with {Seat.objects.count()} seats\n"
+            f"  Drivers        : {Driver.objects.count()}\n"
+            f"  Trips          : {Trip.objects.count()} ({trips_with_offers} with active offers)\n"
+            f"  Bookings       : {Booking.objects.count()}\n"
+            f"  Payments       : {Payment.objects.count()}\n"
+            f"  Bus Locations  : {BusLocation.objects.count()}\n"
             "-------------------------------------\n"
-            "  Admin login  -> admin / Admin@123\n"
-            "  Staff login  -> redbus_staff / Staff@123\n"
+            "  Super admin  -> admin / Admin@123\n"
+            "  Staff admin  -> redbus_staff / Staff@123\n"
+            "  Staff admin  -> vrl_staff / Staff@123\n"
             "  Customers    -> priya_sharma / Test@1234\n"
+            "                  rahul_verma  / Test@1234\n"
+            "                  anita_singh  / Test@1234\n"
             "-------------------------------------\n"
         ))

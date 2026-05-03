@@ -32,6 +32,9 @@ class Company(models.Model):
     phone     = models.CharField(max_length=20, blank=True, null=True)
     email     = models.EmailField(blank=True, null=True)
     address   = models.TextField(blank=True, null=True)
+    # Luggage policy
+    luggage_free_kg       = models.PositiveIntegerField(default=15, help_text="Free luggage per passenger in kg")
+    luggage_charge_per_kg = models.DecimalField(max_digits=6, decimal_places=2, default=0, help_text="Extra charge per kg above free allowance")
 
     class Meta:
         ordering = ['name']
@@ -123,6 +126,7 @@ class Bus(TimeMixin):
     is_ac       = models.BooleanField(default=False)
     is_active   = models.BooleanField(default=True)
     amenities   = models.JSONField(default=list, blank=True)   # e.g. ["WiFi","USB Charging"]
+    image       = models.ImageField(upload_to='bus_images/', null=True, blank=True)
     company     = models.ForeignKey(
         Company, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='buses'
@@ -134,6 +138,14 @@ class Bus(TimeMixin):
 
     def __str__(self):
         return f"{self.name} ({self.bus_number})"
+
+
+class BusImage(models.Model):
+    bus   = models.ForeignKey(Bus, on_delete=models.CASCADE, related_name='gallery_images')
+    image = models.ImageField(upload_to='bus_gallery/')
+
+    class Meta:
+        ordering = ['id']
 
 
 # ── Seat ──────────────────────────────────────────────────────────────────────
@@ -178,6 +190,9 @@ class Trip(TimeMixin):
         max_digits=5, decimal_places=2, default=0,
         help_text="Cancellation fee as % of total amount (0 = free cancellation)"
     )
+    # Offer / discount
+    discount_pct   = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Discount % on base price (0 = no offer)")
+    discount_label = models.CharField(max_length=80, blank=True, default='', help_text="Offer label shown to users, e.g. 'Diwali Special'")
 
     class Meta:
         ordering = ['departure_time']
